@@ -114,12 +114,28 @@ def _push_message(subscription, message):
         webpush(
             subscription_info=subscription,
             data=json.dumps({"title": "C.E.L.I.N.A", "body": message}),
-            vapid_private_key=private_key,
+            vapid_private_key=_vapid_key(private_key),
             vapid_claims={"sub": subject},
         )
     except (WebPushException, OSError, ValueError):
         return False
     return True
+
+
+def _vapid_key(private_key):
+    """Turn a PEM or raw VAPID private key into a key object.
+
+    A PEM stored in an environment variable may arrive as one line. pywebpush
+    only reads that form from a file, so the key body is loaded directly.
+    """
+    from py_vapid import Vapid
+
+    text = private_key.replace("\\n", "\n").strip()
+    if "BEGIN" not in text:
+        return Vapid.from_string(text)
+    parts = [part.strip() for part in text.split("-----") if part.strip()]
+    der = "".join(parts[1].split()).encode()
+    return Vapid.from_der(der)
 
 
 def qstash_allows(body, signature, url):
@@ -236,7 +252,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/remind":
             body = self._read_body()
-            if not qstash_allows(body, self.headers.get("Upstash-Signature"), self._public_url()):
+            signature = self.headers.get("Upstash-Signature")
+            url = self._public_url()
+            if not qstash_allows(body, signature, url):
+                print(_qstash_failure(body, signature, url))
                 self._send({"error": "Unauthorized."}, status=401)
                 return
             self._send(remind(now))
@@ -299,10 +318,14 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _public_url(self):
-        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
+        host = (self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "")
+        host = host.split(",")[0].strip()
         if not host:
             return ""
-        proto = self.headers.get("X-Forwarded-Proto") or "http"
+        proto = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip()
+        if not proto:
+            local = host.startswith("127.") or host.startswith("localhost")
+            proto = "http" if local else "https"
         return f"{proto}://{host}{urlsplit(self.path).path}"
 
     def _read_body(self):
@@ -326,6 +349,31 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def _qstash_failure(body, signature, url):
+    """A short reason for a rejected QStash request, with no key or token."""
+    payload = body if isinstance(body, bytes) else str(body).encode()
+    if not signature:
+        return f"qstash reject missing-signature body={len(payload)} url={url}"
+    token = signature.split(",")[0].strip()
+    parts = token.split(".")
+    if len(parts) != 3:
+        return f"qstash reject parts={len(parts)} body={len(payload)} url={url}"
+    try:
+        claims = json.loads(_b64url_decode(parts[1]))
+    except (ValueError, json.JSONDecodeError):
+        return f"qstash reject bad-claims body={len(payload)} url={url}"
+    expected = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).rstrip(b"=").decode()
+    claimed = str(claims.get("body") or "")
+    return (
+        "qstash reject"
+        f" body={len(payload)}"
+        f" hash={'match' if claimed.replace('=', '') == expected else 'differ'}"
+        f" sub={claims.get('sub')}"
+        f" url={url}"
+        f" iss={claims.get('iss')}"
+    )
+
+
 def _qstash_token_ok(token, body, url, keys):
     parts = token.split(".")
     if len(parts) != 3:
@@ -338,7 +386,7 @@ def _qstash_token_ok(token, body, url, keys):
         return False
     if header.get("alg") != "HS256" or claims.get("iss") != "Upstash":
         return False
-    if url and claims.get("sub") != url:
+    if url and not _same_destination(claims.get("sub"), url):
         return False
     expected = base64.urlsafe_b64encode(hashlib.sha256(body).digest()).rstrip(b"=").decode()
     if claims.get("body") != expected:
@@ -356,6 +404,19 @@ def _qstash_token_ok(token, body, url, keys):
         if hmac.compare_digest(signed, digest):
             return True
     return False
+
+
+def _same_destination(claimed, actual):
+    """Accept the https URL QStash signed when the request arrived as http."""
+    if claimed == actual:
+        return True
+    claimed_parts = urlsplit(claimed or "")
+    actual_parts = urlsplit(actual or "")
+    if claimed_parts.path != actual_parts.path or not claimed_parts.hostname:
+        return False
+    if claimed_parts.hostname != actual_parts.hostname:
+        return False
+    return claimed_parts.scheme == "https" and actual_parts.scheme in ("http", "https")
 
 
 def _b64url_decode(value):

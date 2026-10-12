@@ -191,6 +191,9 @@ class ServerTests(unittest.TestCase):
         try:
             signature = _qstash_signature(body, key, url)
             self.assertTrue(server.qstash_allows(body, signature, url))
+            self.assertTrue(
+                server.qstash_allows(body, signature, "http://celina-seven.vercel.app/api/remind")
+            )
             self.assertFalse(server.qstash_allows(body, signature, "https://example.com/api/remind"))
             self.assertFalse(server.qstash_allows(body, None, url))
         finally:
