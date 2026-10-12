@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C.E.L.I.N.A</title>
+  <link rel="stylesheet" href="/styles.css?v=3">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">C.E.L.I.N.A</p>
+      <h1>Today</h1>
+    </header>
+
+    <section class="card schedule" id="schedule" aria-labelledby="schedule-title">
+      <img src="/images/clock_yoshi.jpg" alt="Yoshi holding a clock">
+      <div class="schedule-body">
+        <div class="schedule-head">
+          <div class="schedule-title">
+            <h2 id="schedule-title">Schedule</h2>
+            <label class="view-date">
+              Date
+              <input id="view-date" type="date" required>
+            </label>
+          </div>
+          <button type="button" id="edit">Edit</button>
+        </div>
+        <div class="event-scroll">
+          <ul id="events"></ul>
+          <p id="empty" hidden>Nothing on this day.</p>
+        </div>
+        <form id="editor" hidden>
+          <label>Name <input id="activity" name="activity" required></label>
+          <label>Date <input id="event-date" name="event-date" type="date" required></label>
+          <div class="times">
+            <label>Start <input id="start" name="start" type="time" required></label>
+            <label>End <input id="end" name="end" type="time" required></label>
+          </div>
+          <label>Repeat
+            <select id="repeat" name="repeat">
+              <option value="">Does not repeat</option>
+              <option value="daily">Every day</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekly">Every week</option>
+              <option value="monthly">Every month</option>
+            </select>
+          </label>
+          <label id="until-label" hidden>Until <input id="until" name="until" type="date"></label>
+          <button type="submit">Add</button>
+          <p id="schedule-note" hidden></p>
+          <div id="schedule-prompt" hidden></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="card reminders" aria-labelledby="reminder-title">
+      <h2 id="reminder-title">Eat and drink</h2>
+      <div class="pair">
+        <button type="button" id="food" data-status="now">
+          <img src="/images/hungry_yoshi.png" alt="Yoshi is hungry">
+          <p class="message"></p>
+        </button>
+        <button type="button" id="water" data-status="now">
+          <img src="/images/thirsty_yoshi_square.jpg" alt="Yoshi is thirsty">
+          <p class="message"></p>
+        </button>
+      </div>
+    </section>
+
+    <p id="error" class="error" hidden>The page could not load. Try again in a moment.</p>
+  </main>
+  <script src="/app.js?v=2"></script>
+</body>
+</html>

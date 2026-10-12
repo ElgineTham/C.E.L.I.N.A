@@ -1,0 +1,256 @@
+:root {
+  color-scheme: light;
+  --ink: #243028;
+  --paper: #f4efe4;
+  --card: #fffaf3;
+  --line: #e4d8c4;
+  --now: #f6e2a8;
+  --done: #d7ead4;
+  --missed: #f3d2c4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+main {
+  width: min(420px, 100%);
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+
+.eyebrow {
+  margin: 0;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+}
+
+h1 {
+  margin: 4px 0 18px;
+  font-size: 2rem;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.schedule {
+  display: grid;
+  grid-template-columns: 116px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.schedule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.schedule-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.view-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.view-date input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  background: white;
+}
+
+.schedule-head h2 {
+  margin: 0;
+}
+
+#edit,
+#editor button,
+.remove {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.schedule img {
+  width: 100%;
+  height: auto;
+}
+
+.pair img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  object-position: center;
+}
+
+.event-scroll {
+  max-height: 168px;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+#events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#events li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+#events li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.when,
+.repeat {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.repeat {
+  color: #5c6b60;
+}
+
+#empty,
+#schedule-note {
+  margin: 0;
+}
+
+.remove {
+  display: none;
+  flex: none;
+}
+
+.schedule.editing .remove {
+  display: inline-flex;
+}
+
+#editor:not([hidden]) {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+#editor input,
+#editor select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  font: inherit;
+  color: inherit;
+  background: white;
+}
+
+.times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+#schedule-note {
+  color: #8a3d32;
+}
+
+#schedule-prompt:not([hidden]) {
+  display: grid;
+  gap: 8px;
+}
+
+#schedule-prompt p {
+  margin: 0;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pair button {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px 8px 12px;
+  background: white;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pair button[data-status="now"] {
+  background: var(--now);
+}
+
+.pair button[data-status="done"] {
+  background: var(--done);
+}
+
+.pair button[data-status="missed"] {
+  background: var(--missed);
+}
+
+.message {
+  min-height: 3.2em;
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+}
+
+.error {
+  color: #8a3d32;
+}

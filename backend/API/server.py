@@ -1,0 +1,171 @@
+"""Serves the home page, today's schedule, and the meal and water icons."""
+
+import json
+import sys
+from datetime import datetime
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import reminder
+import schedule
+
+ROOT = Path(__file__).resolve().parents[2] / "frontend"
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+
+def pacific_now():
+    return datetime.now(PACIFIC)
+
+
+def events_on(day):
+    return schedule.get_schedule(day)
+
+
+def today_events(now):
+    return events_on(now.date().isoformat())
+
+
+def icon_states(now):
+    return reminder.icons(now)
+
+
+def complete_icon(kind, now):
+    reminder.check_off(kind, now)
+    return reminder.icons(now)
+
+
+def add_today_event(
+    now,
+    activity_name,
+    start_time,
+    end_time,
+    choice=None,
+    repeating_frequency=None,
+    repeating_ends=None,
+    day=None,
+):
+    """Add an event that starts on ``day``, or today when ``day`` is omitted.
+
+    With no frequency it happens once. ``daily``, ``weekdays``, ``weekly``,
+    and ``monthly`` repeat from that date until ``repeating_ends``, when that
+    is set. An overlap returns the prompt from ``put_event`` instead of saving.
+    The returned list is the events on that same date.
+    """
+    day = day or now.date().isoformat()
+    result = schedule.put_event(
+        start_time,
+        end_time,
+        activity_name,
+        date=day,
+        repeating_frequency=repeating_frequency or None,
+        repeating_ends=repeating_ends or None,
+        choice=choice,
+    )
+    if isinstance(result, dict):
+        return result
+    return events_on(day)
+
+
+def remove_today_event(now, activity_name, choice=None, day=None):
+    """Delete an event on ``day``, or today when ``day`` is omitted.
+
+    A repeat asks how far to delete. The returned list is the events still on
+    that date.
+    """
+    day = day or now.date().isoformat()
+    result = schedule.delete_event(activity_name, day, choice=choice)
+    if isinstance(result, dict):
+        return result
+    return events_on(day)
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(ROOT), **kwargs)
+
+    def do_GET(self):
+        path = urlsplit(self.path).path
+        now = pacific_now()
+        if path == "/api/today":
+            try:
+                self._send(events_on(self._requested_day(now)))
+            except ValueError as error:
+                self._send({"error": str(error)}, status=400)
+            return
+        if path == "/api/icons":
+            self._send(icon_states(now))
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        path = urlsplit(self.path).path
+        now = pacific_now()
+        if path in ("/api/icons/meal", "/api/icons/water"):
+            kind = path.rsplit("/", 1)[-1]
+            self._send(complete_icon(kind, now))
+            return
+        if path in ("/api/today", "/api/today/delete"):
+            self._change_schedule(path, now)
+            return
+        self.send_error(404)
+
+    def _change_schedule(self, path, now):
+        try:
+            payload = self._read_json()
+            choice = payload.get("choice") or None
+            day = payload.get("date") or None
+            if path == "/api/today":
+                result = add_today_event(
+                    now,
+                    payload.get("activity_name"),
+                    payload.get("start_time"),
+                    payload.get("end_time"),
+                    choice,
+                    repeating_frequency=payload.get("repeating_frequency"),
+                    repeating_ends=payload.get("repeating_ends"),
+                    day=day,
+                )
+            else:
+                result = remove_today_event(
+                    now,
+                    payload.get("activity_name"),
+                    choice,
+                    day=day,
+                )
+        except (ValueError, json.JSONDecodeError, KeyError) as error:
+            self._send({"error": str(error)}, status=400)
+            return
+        self._send(result)
+
+    def _requested_day(self, now):
+        query = parse_qs(urlsplit(self.path).query)
+        chosen = (query.get("date") or [None])[0]
+        return chosen or now.date().isoformat()
+
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0:
+            return {}
+        return json.loads(self.rfile.read(length).decode())
+
+    def _send(self, payload, status=200):
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def main():
+    server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
+    print("C.E.L.I.N.A is at http://127.0.0.1:8765")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
