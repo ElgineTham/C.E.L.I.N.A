@@ -6,6 +6,7 @@ picks: leave now, leave by, or arrive by.
 """
 
 import json
+import os
 from datetime import datetime, timedelta
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -21,7 +22,6 @@ ARRIVAL_BUFFER_MINUTES = 10
 TIMINGS = ("leave_now", "leave_by", "arrive_by")
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 FIELD_MASK = "routes.legs.steps.travelMode,routes.legs.steps.transitDetails"
-GOOGLE_MAPS_API_KEY = "AIzaSyCEP88soylBo66o51eFE8zNqEy2xb9PPUE"
 
 
 def day_window(now):
@@ -135,7 +135,7 @@ def _transit_route(origin, destination, moment, timing, label):
         method="POST",
     )
     try:
-        with urlopen(request, timeout=15) as response:
+        with urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode())
     except HTTPError as error:
         detail = error.read().decode()
@@ -250,6 +250,7 @@ def _pacific(now):
 
 
 def _api_key():
-    if not GOOGLE_MAPS_API_KEY:
+    key = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
+    if not key:
         raise RuntimeError("GOOGLE_MAPS_API_KEY is not set.")
-    return GOOGLE_MAPS_API_KEY
+    return key

@@ -83,8 +83,10 @@ class MapsTests(unittest.TestCase):
             for name in (
                 "UPSTASH_REDIS_REST_URL",
                 "UPSTASH_REDIS_REST_TOKEN",
+                "GOOGLE_MAPS_API_KEY",
             )
         }
+        os.environ["GOOGLE_MAPS_API_KEY"] = "test-key"
 
     def tearDown(self):
         schedule._memory_schedule.clear()

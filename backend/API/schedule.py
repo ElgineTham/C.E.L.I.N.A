@@ -9,8 +9,10 @@ import os
 import uuid
 import urllib.request
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 SCHEDULE_KEY = "schedule"
+PACIFIC = ZoneInfo("America/Los_Angeles")
 CHOICES = ("delete", "keep", "merge")
 DELETE_CHOICES = ("only_that_day", "all_future")
 FREQUENCIES = ("daily", "weekly", "weekdays", "monthly")
@@ -298,7 +300,7 @@ def _normalize_ends(value):
 
 
 def _expired(event, today=None):
-    today = today or date.today()
+    today = today or datetime.now(PACIFIC).date()
     end = event.get("repeating_ends") if event.get("repeating_frequency") else event.get("date")
     if not end:
         return False
