@@ -25,14 +25,21 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         schedule._memory_schedule.clear()
         reminder._memory_reminders.clear()
+        reminder._memory_push.clear()
         self._saved_env = {
             name: os.environ.pop(name, None)
-            for name in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN")
+            for name in (
+                "UPSTASH_REDIS_REST_URL",
+                "UPSTASH_REDIS_REST_TOKEN",
+                "KV_REST_API_URL",
+                "KV_REST_API_TOKEN",
+            )
         }
 
     def tearDown(self):
         schedule._memory_schedule.clear()
         reminder._memory_reminders.clear()
+        reminder._memory_push.clear()
         for name, value in self._saved_env.items():
             if value is not None:
                 os.environ[name] = value
@@ -151,13 +158,29 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(("47.66,-122.31", "leave_now"), seen["school"])
         self.assertEqual(("47.66,-122.31", "leave_now"), seen["home"])
 
-    def test_remind_returns_the_meal_that_was_sent(self):
+    def test_remind_waits_until_the_phone_is_subscribed(self):
         now = datetime(2026, 10, 13, 9, 2, tzinfo=PACIFIC)
 
-        result = server.remind(now)
+        first = server.remind(now)
+        second = server.remind(now)
 
-        self.assertEqual(["Time to eat and drink water."], [item["message"] for item in result["reminders"]])
-        self.assertEqual(result["reminders"][0]["ids"], result["sent"])
+        self.assertEqual([], first["sent"])
+        self.assertEqual("Time to eat and drink water.", first["reminders"][0]["message"])
+        self.assertEqual("Time to eat and drink water.", second["reminders"][0]["message"])
+
+    def test_remind_pushes_the_due_reminder_once(self):
+        now = datetime(2026, 10, 13, 9, 2, tzinfo=PACIFIC)
+        reminder.save_push({
+            "endpoint": "https://web.push.apple.com/test",
+            "keys": {"p256dh": "key", "auth": "auth"},
+        })
+
+        with patch("server._push_message", return_value=True):
+            first = server.remind(now)
+            second = server.remind(now)
+
+        self.assertEqual(first["reminders"][0]["ids"], first["sent"])
+        self.assertEqual([], second["reminders"])
 
     def test_qstash_signature_is_required_when_keys_are_set(self):
         body = b"{}"

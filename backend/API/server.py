@@ -76,15 +76,50 @@ def complete_icon(kind, now):
 
 
 def remind(now):
-    """Meal, water, and bus reminders due at ``now``."""
+    """Send due reminders to the phone, or leave them due until it is subscribed."""
     reminders = reminder.hourly(now)
-    ids = []
+    subscription = reminder.load_push()
+    pushed = []
     for item in reminders:
-        if item.get("ids"):
-            ids.extend(item["ids"])
-        elif item.get("id"):
-            ids.append(item["id"])
-    return {"sent": ids, "reminders": reminders}
+        item_ids = item.get("ids") or ([item["id"]] if item.get("id") else [])
+        if subscription and _push_message(subscription, item["message"]):
+            pushed.extend(item_ids)
+            continue
+        reminder.clear_sent(item_ids)
+    return {"sent": pushed, "reminders": reminders}
+
+
+def save_subscription(subscription):
+    reminder.save_push(subscription)
+    return {"ok": True}
+
+
+def vapid_public_key():
+    key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    if not key:
+        raise RuntimeError("VAPID_PUBLIC_KEY is not set.")
+    return {"publicKey": key}
+
+
+def _push_message(subscription, message):
+    private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    if not private_key:
+        return False
+    try:
+        from pywebpush import WebPushException, webpush
+    except ImportError:
+        return False
+    subject = os.environ.get("VAPID_SUBJECT", "").strip() or "https://celina-seven.vercel.app"
+    try:
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps({"title": "C.E.L.I.N.A", "body": message}),
+            vapid_private_key=private_key,
+            vapid_claims={"sub": subject},
+        )
+    except (WebPushException, OSError, ValueError):
+        return False
+    return True
 
 
 def qstash_allows(body, signature, url):
@@ -169,6 +204,15 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/routes":
             self._routes(now)
             return
+        if path == "/api/vapid":
+            try:
+                self._send(vapid_public_key())
+            except RuntimeError as error:
+                self._send({"error": str(error)}, status=500)
+            return
+        if path == "/manifest.webmanifest":
+            self._send_file(ROOT / "manifest.webmanifest", "application/manifest+json")
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -183,6 +227,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/routes":
             self._route_from_here(now)
+            return
+        if path == "/api/push":
+            try:
+                self._send(save_subscription(self._read_json()))
+            except (ValueError, json.JSONDecodeError) as error:
+                self._send({"error": str(error)}, status=400)
             return
         if path == "/api/remind":
             body = self._read_body()
@@ -239,6 +289,14 @@ class Handler(SimpleHTTPRequestHandler):
         query = parse_qs(urlsplit(self.path).query)
         chosen = (query.get("date") or [None])[0]
         return chosen or now.date().isoformat()
+
+    def _send_file(self, path, content_type):
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _public_url(self):
         host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""

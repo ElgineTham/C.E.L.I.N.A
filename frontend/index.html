@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="C.E.L.I.N.A">
   <title>C.E.L.I.N.A</title>
-  <link rel="stylesheet" href="/styles.css?v=13">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/images/hungry_yoshi.png">
+  <link rel="stylesheet" href="/styles.css?v=14">
 </head>
 <body>
   <main>
     <header>
       <h1>C.E.L.I.N.A</h1>
       <p class="eyebrow">Celine's Exclusive Life Information &amp; Network Assistant</p>
+      <p class="notify">
+        <button type="button" id="notify">Allow notifications</button>
+        <span id="notify-note" hidden></span>
+      </p>
     </header>
 
     <section class="card schedule" id="schedule" aria-labelledby="schedule-title">
@@ -96,6 +105,6 @@
 
     <p id="error" class="error" hidden>The page could not load. Try again in a moment.</p>
   </main>
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

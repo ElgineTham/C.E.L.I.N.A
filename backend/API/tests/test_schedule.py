@@ -14,7 +14,12 @@ class ScheduleTests(unittest.TestCase):
         schedule._memory_schedule.clear()
         self._saved_env = {
             name: os.environ.pop(name, None)
-            for name in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN")
+            for name in (
+                "UPSTASH_REDIS_REST_URL",
+                "UPSTASH_REDIS_REST_TOKEN",
+                "KV_REST_API_URL",
+                "KV_REST_API_TOKEN",
+            )
         }
 
     def tearDown(self):

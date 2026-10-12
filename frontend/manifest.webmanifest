@@ -1,0 +1,17 @@
+{
+  "name": "C.E.L.I.N.A",
+  "short_name": "C.E.L.I.N.A",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4efe4",
+  "theme_color": "#f4efe4",
+  "icons": [
+    {
+      "src": "/images/hungry_yoshi.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

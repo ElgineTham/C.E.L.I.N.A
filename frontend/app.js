@@ -18,6 +18,8 @@ const food = document.querySelector("#food");
 const water = document.querySelector("#water");
 const school = document.querySelector("#school");
 const home = document.querySelector("#home");
+const notify = document.querySelector("#notify");
+const notifyNote = document.querySelector("#notify-note");
 
 const repeatLabels = {
   daily: "Every day",
@@ -34,6 +36,7 @@ const choiceLabels = {
   all_future: "That day and after",
 };
 
+notify.addEventListener("click", allowNotifications);
 food.addEventListener("click", () => checkOff("meal"));
 water.addEventListener("click", () => checkOff("water"));
 school.querySelector(".here").addEventListener("click", () => useHere("school"));
@@ -50,7 +53,70 @@ viewDate.addEventListener("change", () => {
 
 viewDate.value = localDateValue();
 eventDate.value = viewDate.value;
+registerWorker();
+syncNotify();
 load();
+
+function registerWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+  navigator.serviceWorker.register("/sw.js");
+}
+
+function syncNotify() {
+  if (!("Notification" in window) || Notification.permission === "granted") {
+    notify.hidden = true;
+    return;
+  }
+  if (Notification.permission === "denied") {
+    notify.hidden = true;
+    showNotifyNote("Notifications are off in iPhone Settings.");
+  }
+}
+
+async function allowNotifications() {
+  const iphone = /iPhone|iPad/.test(navigator.userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (iphone && !standalone) {
+    showNotifyNote("Open C.E.L.I.N.A from the home screen icon, then tap Allow notifications.");
+    return;
+  }
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    showNotifyNote("This phone cannot show notifications.");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    showNotifyNote("Notifications stay off until you allow them.");
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const key = await getJSON("/api/vapid");
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key.publicKey),
+    });
+    await postJSON("/api/push", subscription.toJSON());
+    notify.hidden = true;
+    showNotifyNote("Notifications are on.");
+  } catch (problem) {
+    showNotifyNote("Notifications could not be turned on.");
+  }
+}
+
+function showNotifyNote(message) {
+  notifyNote.hidden = false;
+  notifyNote.textContent = message;
+}
+
+function urlBase64ToUint8Array(value) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
 
 async function load() {
   try {

@@ -17,15 +17,22 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 class ReminderTests(unittest.TestCase):
     def setUp(self):
         reminder._memory_reminders.clear()
+        reminder._memory_push.clear()
         schedule._memory_schedule.clear()
         schedule._memory_schedule.update(schedule._empty_week())
         self._saved_env = {
             name: os.environ.pop(name, None)
-            for name in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN")
+            for name in (
+                "UPSTASH_REDIS_REST_URL",
+                "UPSTASH_REDIS_REST_TOKEN",
+                "KV_REST_API_URL",
+                "KV_REST_API_TOKEN",
+            )
         }
 
     def tearDown(self):
         reminder._memory_reminders.clear()
+        reminder._memory_push.clear()
         schedule._memory_schedule.clear()
         schedule._memory_schedule.update(schedule._empty_week())
         for name, value in self._saved_env.items():
@@ -95,6 +102,17 @@ class ReminderTests(unittest.TestCase):
         water = reminder.water_icon(now)
         self.assertEqual("done", water["status"])
         self.assertEqual("You drank water at 09:00. Nice work.", water["message"])
+
+    def test_a_push_subscription_is_saved_and_loaded(self):
+        saved = reminder.save_push({
+            "endpoint": "https://web.push.apple.com/test",
+            "keys": {"p256dh": "key", "auth": "auth"},
+        })
+
+        self.assertEqual(saved, reminder.load_push())
+
+        with self.assertRaises(ValueError):
+            reminder.save_push({"endpoint": "https://web.push.apple.com/test"})
 
     def test_school_route_sends_once_when_leave_time_is_within_the_hour(self):
         now = datetime(2026, 10, 13, 8, 0, tzinfo=PACIFIC)

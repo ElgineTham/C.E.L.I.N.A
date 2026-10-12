@@ -390,15 +390,25 @@ def _save_schedule(week):
 
 
 def _redis_configured():
-    return bool(
-        os.environ.get("UPSTASH_REDIS_REST_URL")
-        and os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    return _redis_credentials() is not None
+
+
+def _redis_credentials():
+    pairs = (
+        ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"),
+        ("KV_REST_API_URL", "KV_REST_API_TOKEN"),
     )
+    for url_name, token_name in pairs:
+        url = os.environ.get(url_name, "").strip()
+        token = os.environ.get(token_name, "").strip()
+        if url and token:
+            return url, token
+    return None
 
 
 def _redis(*command):
-    url = os.environ["UPSTASH_REDIS_REST_URL"].rstrip("/")
-    token = os.environ["UPSTASH_REDIS_REST_TOKEN"]
+    url, token = _redis_credentials()
+    url = url.rstrip("/")
     request = urllib.request.Request(
         url,
         data=json.dumps(list(command)).encode(),

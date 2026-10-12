@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import maps
 
 REMINDERS_KEY = "reminders"
+PUSH_KEY = "push"
 MEAL_HOURS = (9, 12, 18)
 WATER_HOURS = (9, 11, 12, 14, 16, 18, 20)
 KINDS = ("meal", "water")
@@ -28,6 +29,7 @@ ROUTE_KINDS = ("school", "home")
 SCHOOL_LOOKUP = timedelta(hours=3)
 
 _memory_reminders = []
+_memory_push = {}
 
 
 def food_icon(now):
@@ -43,6 +45,58 @@ def water_icon(now):
 def icons(now):
     """Both icons for the home card."""
     return {"food": food_icon(now), "water": water_icon(now)}
+
+
+def save_push(subscription):
+    """Store the phone's push subscription."""
+    if not isinstance(subscription, dict):
+        raise ValueError("A push subscription is required.")
+    endpoint = subscription.get("endpoint")
+    keys = subscription.get("keys") or {}
+    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+        raise ValueError("A push subscription is required.")
+    stored = {
+        "endpoint": endpoint,
+        "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
+    }
+    if _redis_configured():
+        _redis("SET", PUSH_KEY, json.dumps(stored))
+    else:
+        _memory_push.clear()
+        _memory_push.update(stored)
+    return dict(stored)
+
+
+def load_push():
+    """Return the saved push subscription, or nothing."""
+    if _redis_configured():
+        raw = _redis("GET", PUSH_KEY)
+        stored = json.loads(raw) if raw else None
+    else:
+        stored = dict(_memory_push) if _memory_push else None
+    if not isinstance(stored, dict) or not stored.get("endpoint"):
+        return None
+    return stored
+
+
+def clear_push():
+    """Remove the saved push subscription."""
+    if _redis_configured():
+        _redis("DEL", PUSH_KEY)
+        return
+    _memory_push.clear()
+
+
+def clear_sent(ids):
+    """Let these reminders send again on a later check."""
+    wanted = set(ids)
+    if not wanted:
+        return
+    reminders = _load_reminders()
+    for item in reminders:
+        if item["id"] in wanted:
+            item["sentAt"] = None
+    _save_reminders(reminders)
 
 
 def check_off(kind, now):
@@ -328,15 +382,25 @@ def _save_reminders(reminders):
 
 
 def _redis_configured():
-    return bool(
-        os.environ.get("UPSTASH_REDIS_REST_URL")
-        and os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    return _redis_credentials() is not None
+
+
+def _redis_credentials():
+    pairs = (
+        ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"),
+        ("KV_REST_API_URL", "KV_REST_API_TOKEN"),
     )
+    for url_name, token_name in pairs:
+        url = os.environ.get(url_name, "").strip()
+        token = os.environ.get(token_name, "").strip()
+        if url and token:
+            return url, token
+    return None
 
 
 def _redis(*command):
-    url = os.environ["UPSTASH_REDIS_REST_URL"].rstrip("/")
-    token = os.environ["UPSTASH_REDIS_REST_TOKEN"]
+    url, token = _redis_credentials()
+    url = url.rstrip("/")
     request = urllib.request.Request(
         url,
         data=json.dumps(list(command)).encode(),
