@@ -190,7 +190,9 @@ class ServerTests(unittest.TestCase):
         os.environ["QSTASH_NEXT_SIGNING_KEY"] = "next-signing-key"
         try:
             signature = _qstash_signature(body, key, url)
+            padded = _qstash_signature(body, key, url, pad_body=True)
             self.assertTrue(server.qstash_allows(body, signature, url))
+            self.assertTrue(server.qstash_allows(body, padded, url))
             self.assertTrue(
                 server.qstash_allows(body, signature, "http://celina-seven.vercel.app/api/remind")
             )
@@ -201,16 +203,19 @@ class ServerTests(unittest.TestCase):
             os.environ.pop("QSTASH_NEXT_SIGNING_KEY", None)
 
 
-def _qstash_signature(body, key, url):
+def _qstash_signature(body, key, url, pad_body=False):
     def encode(raw):
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
     header = encode(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     now = int(time.time())
+    body_hash = base64.urlsafe_b64encode(hashlib.sha256(body).digest()).decode()
+    if not pad_body:
+        body_hash = body_hash.rstrip("=")
     claims = {
         "iss": "Upstash",
         "sub": url,
-        "body": encode(hashlib.sha256(body).digest()),
+        "body": body_hash,
         "iat": now,
         "nbf": now,
         "exp": now + 60,

@@ -255,7 +255,6 @@ class Handler(SimpleHTTPRequestHandler):
             signature = self.headers.get("Upstash-Signature")
             url = self._public_url()
             if not qstash_allows(body, signature, url):
-                print(_qstash_failure(body, signature, url))
                 self._send({"error": "Unauthorized."}, status=401)
                 return
             self._send(remind(now))
@@ -349,31 +348,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def _qstash_failure(body, signature, url):
-    """A short reason for a rejected QStash request, with no key or token."""
-    payload = body if isinstance(body, bytes) else str(body).encode()
-    if not signature:
-        return f"qstash reject missing-signature body={len(payload)} url={url}"
-    token = signature.split(",")[0].strip()
-    parts = token.split(".")
-    if len(parts) != 3:
-        return f"qstash reject parts={len(parts)} body={len(payload)} url={url}"
-    try:
-        claims = json.loads(_b64url_decode(parts[1]))
-    except (ValueError, json.JSONDecodeError):
-        return f"qstash reject bad-claims body={len(payload)} url={url}"
-    expected = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).rstrip(b"=").decode()
-    claimed = str(claims.get("body") or "")
-    return (
-        "qstash reject"
-        f" body={len(payload)}"
-        f" hash={'match' if claimed.replace('=', '') == expected else 'differ'}"
-        f" sub={claims.get('sub')}"
-        f" url={url}"
-        f" iss={claims.get('iss')}"
-    )
-
-
 def _qstash_token_ok(token, body, url, keys):
     parts = token.split(".")
     if len(parts) != 3:
@@ -389,7 +363,8 @@ def _qstash_token_ok(token, body, url, keys):
     if url and not _same_destination(claims.get("sub"), url):
         return False
     expected = base64.urlsafe_b64encode(hashlib.sha256(body).digest()).rstrip(b"=").decode()
-    if claims.get("body") != expected:
+    claimed = str(claims.get("body") or "").replace("=", "")
+    if claimed != expected:
         return False
     now = int(time.time())
     exp = claims.get("exp")
