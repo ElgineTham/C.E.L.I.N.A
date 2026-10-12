@@ -1,7 +1,12 @@
 """Serves the home page, today's schedule, transit routes, and the meal and water icons."""
 
+import base64
+import hashlib
+import hmac
 import json
+import os
 import sys
+import time
 from datetime import datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -68,6 +73,36 @@ def _moment_on(now, day):
 def complete_icon(kind, now):
     reminder.check_off(kind, now)
     return reminder.icons(now)
+
+
+def remind(now):
+    """Meal, water, and bus reminders due at ``now``."""
+    reminders = reminder.hourly(now)
+    ids = []
+    for item in reminders:
+        if item.get("ids"):
+            ids.extend(item["ids"])
+        elif item.get("id"):
+            ids.append(item["id"])
+    return {"sent": ids, "reminders": reminders}
+
+
+def qstash_allows(body, signature, url):
+    """Accept QStash when its signature matches, or when no keys are configured."""
+    keys = [
+        os.environ.get("QSTASH_CURRENT_SIGNING_KEY", "").strip(),
+        os.environ.get("QSTASH_NEXT_SIGNING_KEY", "").strip(),
+    ]
+    keys = [key for key in keys if key]
+    if not keys:
+        return True
+    if not signature:
+        return False
+    payload = body if isinstance(body, bytes) else str(body).encode()
+    for token in signature.split(","):
+        if _qstash_token_ok(token.strip(), payload, url, keys):
+            return True
+    return False
 
 
 def add_today_event(
@@ -149,6 +184,13 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/routes":
             self._route_from_here(now)
             return
+        if path == "/api/remind":
+            body = self._read_body()
+            if not qstash_allows(body, self.headers.get("Upstash-Signature"), self._public_url()):
+                self._send({"error": "Unauthorized."}, status=401)
+                return
+            self._send(remind(now))
+            return
         self.send_error(404)
 
     def _change_schedule(self, path, now):
@@ -198,11 +240,24 @@ class Handler(SimpleHTTPRequestHandler):
         chosen = (query.get("date") or [None])[0]
         return chosen or now.date().isoformat()
 
-    def _read_json(self):
-        length = int(self.headers.get("Content-Length", "0"))
+    def _public_url(self):
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
+        if not host:
+            return ""
+        proto = self.headers.get("X-Forwarded-Proto") or "http"
+        return f"{proto}://{host}{urlsplit(self.path).path}"
+
+    def _read_body(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
         if length == 0:
+            return b""
+        return self.rfile.read(length)
+
+    def _read_json(self):
+        body = self._read_body()
+        if not body:
             return {}
-        return json.loads(self.rfile.read(length).decode())
+        return json.loads(body.decode())
 
     def _send(self, payload, status=200):
         body = json.dumps(payload).encode()
@@ -211,6 +266,43 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+
+def _qstash_token_ok(token, body, url, keys):
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        header = json.loads(_b64url_decode(parts[0]))
+        claims = json.loads(_b64url_decode(parts[1]))
+        digest = _b64url_decode(parts[2])
+    except (ValueError, json.JSONDecodeError):
+        return False
+    if header.get("alg") != "HS256" or claims.get("iss") != "Upstash":
+        return False
+    if url and claims.get("sub") != url:
+        return False
+    expected = base64.urlsafe_b64encode(hashlib.sha256(body).digest()).rstrip(b"=").decode()
+    if claims.get("body") != expected:
+        return False
+    now = int(time.time())
+    exp = claims.get("exp")
+    nbf = claims.get("nbf")
+    if isinstance(exp, (int, float)) and now > exp + 30:
+        return False
+    if isinstance(nbf, (int, float)) and now + 30 < nbf:
+        return False
+    signing_input = f"{parts[0]}.{parts[1]}".encode()
+    for key in keys:
+        signed = hmac.new(key.encode(), signing_input, hashlib.sha256).digest()
+        if hmac.compare_digest(signed, digest):
+            return True
+    return False
+
+
+def _b64url_decode(value):
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
 
 
 def main():

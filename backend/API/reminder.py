@@ -1,10 +1,14 @@
-"""Meal and water reminders.
+"""Meal, water, and bus reminders.
 
 Meals are at 09:00, 12:00, and 18:00. Water is every two hours from 09:00
 through 20:00, which includes those meal hours. Each icon shows whether to
 eat or drink now, congratulates the latest slot she checked off, or names the
-latest slot she missed. ``hourly`` sends one reminder when an icon is due and
-that reminder has not been sent yet.
+latest slot she missed.
+
+``hourly`` sends the meal and water reminder due this hour, and a bus
+reminder for each scheduled trip whose leave time is still ahead and at most
+an hour away. A leave time that has already passed is skipped. Each reminder
+is sent once.
 
 When Redis is not configured, reminders are kept in memory.
 """
@@ -12,12 +16,16 @@ When Redis is not configured, reminders are kept in memory.
 import json
 import os
 import urllib.request
-from datetime import timedelta
+from datetime import datetime, timedelta
+
+import maps
 
 REMINDERS_KEY = "reminders"
 MEAL_HOURS = (9, 12, 18)
 WATER_HOURS = (9, 11, 12, 14, 16, 18, 20)
 KINDS = ("meal", "water")
+ROUTE_KINDS = ("school", "home")
+SCHOOL_LOOKUP = timedelta(hours=3)
 
 _memory_reminders = []
 
@@ -45,12 +53,22 @@ def check_off(kind, now):
 
 
 def hourly(now):
-    """Send the reminder due this hour, or nothing.
+    """Send meal, water, and bus reminders that are due at ``now``.
 
     A meal hour reminds her to eat and drink. Any other water hour reminds
-    her to drink. A slot that was already sent, or an hour with nothing due,
-    sends nothing. Missed and completed slots stay on the icons.
+    her to drink. A bus reminder is sent when that trip's leave time is still
+    ahead and no more than an hour away. A slot that was already sent, a
+    passed leave time, or an hour with nothing due sends nothing.
     """
+    sent = []
+    meal = _meal_and_water(now)
+    if meal is not None:
+        sent.append(meal)
+    sent.extend(_route_reminders(now))
+    return sent
+
+
+def _meal_and_water(now):
     due = []
     for kind in KINDS:
         if _icon(kind, now)["status"] != "now":
@@ -70,13 +88,132 @@ def hourly(now):
         message = "Time to eat."
 
     sent_at = _iso(now)
+    saved = []
     for kind in due:
-        _upsert(kind, _latest_started_slot(kind, now), sentAt=sent_at)
+        saved.append(_upsert(kind, _latest_started_slot(kind, now), sentAt=sent_at))
     return {
+        "ids": [item["id"] for item in saved],
         "message": message,
         "kinds": due,
         "at": _iso(_latest_started_slot(due[-1], now)),
     }
+
+
+def _route_reminders(now):
+    sent = []
+    for kind in ROUTE_KINDS:
+        reminder = _route_reminder(kind, now)
+        if reminder is not None:
+            sent.append(reminder)
+    return sent
+
+
+def _route_reminder(kind, now):
+    """One bus reminder, when its leave time is inside the coming hour."""
+    if _by_id(_route_id(kind, now), "sentAt") is not None:
+        return None
+    if not _route_in_range(kind, now):
+        return None
+    try:
+        route = _scheduled_route(kind, now)
+    except (RuntimeError, OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+    leave_at = _parse_time(route.get("leaveAt"))
+    if leave_at is None or not _within_coming_hour(now, leave_at):
+        return None
+
+    reminder_id = _remember_route(kind, now, leave_at)
+    clock = maps._pacific(leave_at).strftime("%H:%M")
+    summary = (route.get("summary") or "").strip()
+    message = f"Leave by {clock}."
+    if summary:
+        message = f"{message} {summary}."
+    return {
+        "id": reminder_id,
+        "kind": kind,
+        "message": message,
+        "at": maps._pacific(leave_at).isoformat(),
+    }
+
+
+def _scheduled_route(kind, now):
+    if kind == "school":
+        return maps.route_to_university_district(now)
+    return maps.route_to_griffis(now)
+
+
+def _route_in_range(kind, now):
+    """Whether the scheduled trip can still leave within the coming hour.
+
+    The school trip leaves before arrival, so it is looked up while that
+    arrival is still ahead. The home trip leaves at the last event's end, so
+    it is looked up only while that end is still ahead and inside the hour.
+    """
+    window = maps.day_window(now)
+    moment = maps._pacific(now)
+    if kind == "school":
+        start = window["first_start"]
+        if not start:
+            return False
+        arrive = maps._on_clock(moment, start) - timedelta(minutes=maps.ARRIVAL_BUFFER_MINUTES)
+        return moment < arrive <= moment + SCHOOL_LOOKUP
+    end = window["last_end"]
+    if not end:
+        return False
+    leave = maps._on_clock(moment, end)
+    return moment <= leave <= moment + timedelta(hours=1)
+
+
+def _within_coming_hour(now, leave_at):
+    moment = maps._pacific(now)
+    leave_at = maps._pacific(leave_at)
+    return moment <= leave_at <= moment + timedelta(hours=1)
+
+
+def _route_id(kind, now):
+    day = maps._pacific(now).date().strftime("%Y%m%d")
+    return f"rem_route_{kind}_{day}"
+
+
+def _parse_time(value):
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return maps._pacific(parsed)
+
+
+def _remember_route(kind, now, leave_at):
+    reminders = _load_reminders()
+    reminder_id = _route_id(kind, now)
+    found = None
+    for reminder in reminders:
+        if reminder["id"] == reminder_id:
+            found = reminder
+            break
+    if found is None:
+        found = {
+            "id": reminder_id,
+            "kind": kind,
+            "dueAt": maps._pacific(leave_at).isoformat(),
+            "sentAt": None,
+            "completedAt": None,
+        }
+        reminders.append(found)
+    if found.get("sentAt") is None:
+        found["sentAt"] = _iso(now)
+        found["dueAt"] = maps._pacific(leave_at).isoformat()
+    _save_reminders(reminders)
+    return reminder_id
+
+
+def _by_id(reminder_id, name):
+    for reminder in _load_reminders():
+        if reminder["id"] == reminder_id:
+            return reminder.get(name)
+    return None
 
 
 def _icon(kind, now):

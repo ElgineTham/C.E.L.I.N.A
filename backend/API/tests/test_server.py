@@ -1,5 +1,10 @@
+import base64
+import hashlib
+import hmac
+import json
 import os
 import sys
+import time
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -145,6 +150,48 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(("47.66,-122.31", "leave_now"), seen["school"])
         self.assertEqual(("47.66,-122.31", "leave_now"), seen["home"])
+
+    def test_remind_returns_the_meal_that_was_sent(self):
+        now = datetime(2026, 10, 13, 9, 2, tzinfo=PACIFIC)
+
+        result = server.remind(now)
+
+        self.assertEqual(["Time to eat and drink water."], [item["message"] for item in result["reminders"]])
+        self.assertEqual(result["reminders"][0]["ids"], result["sent"])
+
+    def test_qstash_signature_is_required_when_keys_are_set(self):
+        body = b"{}"
+        url = "https://celina-seven.vercel.app/api/remind"
+        key = "test-signing-key"
+        os.environ["QSTASH_CURRENT_SIGNING_KEY"] = key
+        os.environ["QSTASH_NEXT_SIGNING_KEY"] = "next-signing-key"
+        try:
+            signature = _qstash_signature(body, key, url)
+            self.assertTrue(server.qstash_allows(body, signature, url))
+            self.assertFalse(server.qstash_allows(body, signature, "https://example.com/api/remind"))
+            self.assertFalse(server.qstash_allows(body, None, url))
+        finally:
+            os.environ.pop("QSTASH_CURRENT_SIGNING_KEY", None)
+            os.environ.pop("QSTASH_NEXT_SIGNING_KEY", None)
+
+
+def _qstash_signature(body, key, url):
+    def encode(raw):
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    header = encode(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    now = int(time.time())
+    claims = {
+        "iss": "Upstash",
+        "sub": url,
+        "body": encode(hashlib.sha256(body).digest()),
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+    }
+    payload = encode(json.dumps(claims, separators=(",", ":")).encode())
+    digest = hmac.new(key.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
+    return f"{header}.{payload}.{encode(digest)}"
 
 
 if __name__ == "__main__":
