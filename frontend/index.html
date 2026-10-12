@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>C.E.L.I.N.A</title>
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=13">
 </head>
 <body>
   <main>
     <header>
-      <p class="eyebrow">C.E.L.I.N.A</p>
-      <h1>Today</h1>
+      <h1>C.E.L.I.N.A</h1>
+      <p class="eyebrow">Celine's Exclusive Life Information &amp; Network Assistant</p>
     </header>
 
     <section class="card schedule" id="schedule" aria-labelledby="schedule-title">
@@ -54,6 +54,32 @@
       </div>
     </section>
 
+    <section class="card routes" aria-labelledby="routes-title">
+      <h2 id="routes-title">Bus</h2>
+      <div class="pair">
+        <div class="ride" id="school">
+          <img src="/images/going_out_yoshi.jpg" alt="Yoshi holding a sign that says Going out">
+          <div class="ride-times" hidden>
+            <p class="leave"></p>
+            <p class="eta"></p>
+            <a class="see-route" href="" target="_blank" rel="noopener">See route</a>
+          </div>
+          <p class="message">Looking up the bus.</p>
+          <button type="button" class="here">Use current location</button>
+        </div>
+        <div class="ride" id="home">
+          <img src="/images/going_home_yoshi.jpg" alt="Yoshi holding a sign that says Going home">
+          <div class="ride-times" hidden>
+            <p class="leave"></p>
+            <p class="eta"></p>
+            <a class="see-route" href="" target="_blank" rel="noopener">See route</a>
+          </div>
+          <p class="message">Looking up the bus.</p>
+          <button type="button" class="here">Use current location</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card reminders" aria-labelledby="reminder-title">
       <h2 id="reminder-title">Eat and drink</h2>
       <div class="pair">
@@ -70,6 +96,6 @@
 
     <p id="error" class="error" hidden>The page could not load. Try again in a moment.</p>
   </main>
-  <script src="/app.js?v=2"></script>
+  <script src="/app.js?v=6"></script>
 </body>
 </html>

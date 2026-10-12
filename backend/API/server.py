@@ -1,4 +1,4 @@
-"""Serves the home page, today's schedule, and the meal and water icons."""
+"""Serves the home page, today's schedule, transit routes, and the meal and water icons."""
 
 import json
 import sys
@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import maps
 import reminder
 import schedule
 
@@ -31,6 +32,37 @@ def today_events(now):
 
 def icon_states(now):
     return reminder.icons(now)
+
+
+def transit_routes(now, day=None):
+    """Both scheduled trips for ``day``, or for today when ``day`` is omitted.
+
+    The school trip arrives before the first event. The home trip leaves at
+    the last event's end. A day other than today is planned from midnight,
+    so both of those times are still ahead.
+    """
+    moment = _moment_on(now, day)
+    return {
+        "school": maps.route_to_university_district(moment),
+        "home": maps.route_to_griffis(moment),
+    }
+
+
+def transit_from_here(now, side, origin):
+    """Leave now from a current location toward school or home."""
+    if origin is None or not str(origin).strip():
+        raise ValueError("origin is required.")
+    if side == "school":
+        return maps.route_to_university_district(now, origin=origin, timing="leave_now")
+    if side == "home":
+        return maps.route_to_griffis(now, origin=origin, timing="leave_now")
+    raise ValueError("side must be school or home.")
+
+
+def _moment_on(now, day):
+    if not day or day == now.date().isoformat():
+        return now
+    return datetime.fromisoformat(day).replace(tzinfo=PACIFIC)
 
 
 def complete_icon(kind, now):
@@ -99,6 +131,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/icons":
             self._send(icon_states(now))
             return
+        if path == "/api/routes":
+            self._routes(now)
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -110,6 +145,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path in ("/api/today", "/api/today/delete"):
             self._change_schedule(path, now)
+            return
+        if path == "/api/routes":
+            self._route_from_here(now)
             return
         self.send_error(404)
 
@@ -140,6 +178,20 @@ class Handler(SimpleHTTPRequestHandler):
             self._send({"error": str(error)}, status=400)
             return
         self._send(result)
+
+    def _routes(self, now):
+        try:
+            self._send(transit_routes(now, self._requested_day(now)))
+        except (ValueError, RuntimeError) as error:
+            self._send({"error": str(error)}, status=400 if isinstance(error, ValueError) else 502)
+
+    def _route_from_here(self, now):
+        try:
+            payload = self._read_json()
+            self._send(transit_from_here(now, payload.get("side"), payload.get("origin")))
+        except (ValueError, RuntimeError, json.JSONDecodeError) as error:
+            status = 502 if isinstance(error, RuntimeError) else 400
+            self._send({"error": str(error)}, status=status)
 
     def _requested_day(self, now):
         query = parse_qs(urlsplit(self.path).query)

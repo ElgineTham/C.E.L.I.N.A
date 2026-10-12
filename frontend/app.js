@@ -16,6 +16,8 @@ const note = document.querySelector("#schedule-note");
 const prompt = document.querySelector("#schedule-prompt");
 const food = document.querySelector("#food");
 const water = document.querySelector("#water");
+const school = document.querySelector("#school");
+const home = document.querySelector("#home");
 
 const repeatLabels = {
   daily: "Every day",
@@ -34,6 +36,8 @@ const choiceLabels = {
 
 food.addEventListener("click", () => checkOff("meal"));
 water.addEventListener("click", () => checkOff("water"));
+school.querySelector(".here").addEventListener("click", () => useHere("school"));
+home.querySelector(".here").addEventListener("click", () => useHere("home"));
 edit.addEventListener("click", toggleEdit);
 editor.addEventListener("submit", addEvent);
 repeat.addEventListener("change", syncRepeat);
@@ -41,6 +45,7 @@ viewDate.addEventListener("change", () => {
   eventDate.value = viewDate.value;
   clearPrompt();
   loadSchedule();
+  loadRoutes();
 });
 
 viewDate.value = localDateValue();
@@ -57,6 +62,7 @@ async function load() {
     renderIcon(food, icons.food);
     renderIcon(water, icons.water);
     error.hidden = true;
+    loadRoutes();
   } catch (problem) {
     error.hidden = false;
   }
@@ -125,6 +131,7 @@ async function saveEvent(choice) {
     syncRepeat();
     eventDate.value = viewDate.value;
     error.hidden = true;
+    loadRoutes();
     const visible = shown.some(
       (event) => event.activity_name === name && event.start_time === startTime,
     );
@@ -150,6 +157,7 @@ async function removeEvent(name, choice) {
     }
     renderSchedule(saved);
     error.hidden = true;
+    loadRoutes();
   } catch (problem) {
     showNote(problem.message);
   }
@@ -244,6 +252,73 @@ function renderIcon(button, icon) {
   const image = button.querySelector("img");
   image.src = src;
   image.alt = alt;
+}
+
+async function loadRoutes() {
+  setRide(school, "Looking up the bus.");
+  setRide(home, "Looking up the bus.");
+  try {
+    const routes = await getJSON(`/api/routes?date=${viewDate.value}`);
+    renderRide(school, routes.school);
+    renderRide(home, routes.home);
+  } catch (problem) {
+    const message = "The bus route could not be loaded.";
+    setRide(school, message);
+    setRide(home, message);
+  }
+}
+
+async function useHere(side) {
+  const ride = side === "school" ? school : home;
+  const button = ride.querySelector(".here");
+  button.disabled = true;
+  setRide(ride, "Finding where you are.");
+  try {
+    const position = await currentPosition();
+    const origin = `${position.coords.latitude},${position.coords.longitude}`;
+    const route = await postJSON("/api/routes", { side, origin });
+    renderRide(ride, route);
+  } catch (problem) {
+    setRide(ride, problem.message || "Current location is unavailable.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function currentPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Current location is unavailable."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, () => {
+      reject(new Error("Current location is unavailable."));
+    }, { timeout: 10000 });
+  });
+}
+
+function renderRide(ride, route) {
+  ride.querySelector(".leave").textContent = `Leave by: ${clock(route.leaveAt)}`;
+  ride.querySelector(".eta").textContent = `ETA: ${clock(route.arriveAt)}`;
+  const link = ride.querySelector(".see-route");
+  link.href = route.mapsUrl;
+  ride.querySelector(".ride-times").hidden = false;
+  ride.querySelector(".message").hidden = true;
+}
+
+function setRide(ride, message) {
+  ride.querySelector(".ride-times").hidden = true;
+  const status = ride.querySelector(".message");
+  status.hidden = false;
+  status.textContent = message;
+}
+
+function clock(iso) {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Los_Angeles",
+  });
 }
 
 async function getJSON(url, options) {

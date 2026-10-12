@@ -28,14 +28,18 @@ main {
 }
 
 .eyebrow {
-  margin: 0;
-  letter-spacing: 0.14em;
+  margin: 0 0 18px;
+  letter-spacing: 0.02em;
   font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 h1 {
-  margin: 4px 0 18px;
+  margin: 0 0 4px;
   font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 h2 {
@@ -233,22 +237,77 @@ h2 {
   cursor: pointer;
 }
 
-.pair button[data-status="now"] {
-  background: var(--now);
+.reminders .pair button[data-status="now"],
+.reminders .pair button[data-status="missed"] {
+  background: #e85c5c;
+  color: white;
 }
 
-.pair button[data-status="done"] {
-  background: var(--done);
-}
-
-.pair button[data-status="missed"] {
-  background: var(--missed);
+.reminders .pair button[data-status="done"] {
+  background: #3c9d62;
+  color: white;
 }
 
 .message {
   min-height: 3.2em;
   margin: 8px 0 0;
   font-size: 0.92rem;
+}
+
+.ride {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px 8px 12px;
+  background: white;
+}
+
+.ride img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.ride .message {
+  flex: 1;
+  min-height: 2.6em;
+  margin: 0;
+}
+
+.ride-times {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ride-times p,
+.see-route {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.see-route {
+  color: #2f6fed;
+  text-decoration: underline;
+  width: fit-content;
+}
+
+.ride .here {
+  border: 0;
+  border-radius: 999px;
+  background: #2f6fed;
+  color: white;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.ride .here:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .error {
