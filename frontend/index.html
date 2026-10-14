@@ -9,7 +9,7 @@
   <title>C.E.L.I.N.A</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/images/hungry_yoshi.png">
-  <link rel="stylesheet" href="/styles.css?v=14">
+  <link rel="stylesheet" href="/styles.css?v=18">
 </head>
 <body>
   <main>
@@ -103,8 +103,20 @@
       </div>
     </section>
 
+    <section class="card reasons" id="reasons" aria-labelledby="reasons-title">
+      <div class="reasons-head">
+        <h2 id="reasons-title">21 reasons why</h2>
+        <p id="reason-count">1 / 21</p>
+      </div>
+      <p id="reason-text"></p>
+      <button type="button" id="reason-play" aria-label="Play this reason">
+        <video id="reason-image" hidden muted loop autoplay playsinline></video>
+        <span id="reason-play-label">Play</span>
+      </button>
+    </section>
+
     <p id="error" class="error" hidden>The page could not load. Try again in a moment.</p>
   </main>
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=13"></script>
 </body>
 </html>

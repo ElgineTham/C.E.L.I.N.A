@@ -328,3 +328,64 @@ h2 {
 .error {
   color: #8a3d32;
 }
+
+.reasons {
+  padding: 16px 0 0;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.reasons-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reasons-head,
+#reason-text {
+  padding-inline: 16px;
+}
+
+.reasons-head h2 {
+  margin: 0;
+}
+
+#reason-count {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: #5c6b60;
+}
+
+#reason-text {
+  margin: 12px 0;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+#reason-play {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+#reason-play video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 480 / 858;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+#reason-play video:not([hidden]) + #reason-play-label {
+  display: none;
+}

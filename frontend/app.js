@@ -395,6 +395,107 @@ async function getJSON(url, options) {
   return response.json();
 }
 
+// Fill text, image, and audio for each reason. Leave a field blank until that file exists.
+const reasons = [
+  { text: "Your beautiful face outdoes the 7 wonders of the earth!", image: "/videos/yoshi_flower.mp4", audio: "/audios/one.mp3" },
+  { text: "Your beautiful smile stuns my world!", image: "/videos/yoshi_rolling.mp4", audio: "/audios/two.mp3" },
+  { text: "Your wonderful eyes shines brighter than the sun!", image: "/videos/yoshi_egg.mp4", audio: "/audios/three.mp3" },
+  { text: "Your sense of humor makes life much easier!", image: "/videos/yoshi_standing.mp4", audio: "/audios/four.mp3" },
+  { text: "Your IQ and EQ that makes you such a lovely person to talk to!", image: "/videos/yoshi_flower.mp4", audio: "/audios/five.mp3" },
+  { text: "Your hugs and hands that strengthens me as I have someone to live this life with!", image: "/videos/yoshi_rolling.mp4", audio: "/audios/six.mp3" },
+  { text: "Your picky eating habits and exquisite taste that teaches me another perspective!", image: "/videos/yoshi_egg.mp4", audio: "/audios/seven.mp3" },
+  { text: "Your little arguments that may make me mad, but always teaches me something new every single day!", image: "/videos/yoshi_standing.mp4", audio: "/audios/eight.mp3" },
+  { text: "Your principles and opinions that shape me into a better person!", image: "/videos/yoshi_flower.mp4", audio: "/audios/nine.mp3" },
+  { text: "Your personality and behaviors that sparks a cuteness aggression", image: "/videos/yoshi_rolling.mp4", audio: "/audios/ten.mp3" },
+  { text: "Despite our fights, it teaches me more about our relationship. It makes me grow in this relationship.", image: "/videos/yoshi_egg.mp4", audio: "/audios/eleven.mp3" },
+  { text: "Despite our disagreements, I would never want to have it with anyone else. You're the reaason I never get tired of resolving disagreements in this relationship.", image: "/videos/yoshi_standing.mp4", audio: "/audios/twelve.mp3" },
+  { text: "You give me a reason to become a better person. A reason to step out of my comfort zone and become a partner capable of providing you with a life we dream of.", image: "/videos/yoshi_flower.mp4", audio: "/audios/thirteen.mp3" },
+  { text: "You give me the courage to try and a reason to fail, because no matter what, I believe you'll be there with me every step of our journey together.", image: "/videos/yoshi_rolling.mp4", audio: "/audios/fourteen.mp3" },
+  { text: "I mean it when you bring colors into my life. You bring all sorts of emotion from fun to sadness, from fights to laughters, and that's what makes life much more beautiful.", image: "/videos/yoshi_egg.mp4", audio: "/audios/fifteen.mp3" },
+  { text: "I mean it when you are beautiful, because you alone makes me realize how lucky I am to have you. People may have wealth, people may have strength, people may have looks, but trust me when I take pride because no one can have a partner like you.", image: "/videos/yoshi_standing.mp4", audio: "/audios/sixteen.mp3" },
+  { text: "I mean it when you make me feel and do stuffs I never thought I was capable of. Because of you Celine, I saw traits in myself that I never thought was there.", image: "/videos/yoshi_flower.mp4", audio: "/audios/seventeen.mp3" },
+  { text: "I mean it Celine when you showed me what true love is. A love that is not always about laughs and fun, but a love that is beautiful and meaningful in its own special way.", image: "/videos/yoshi_rolling.mp4", audio: "/audios/eighteen.mp3" },
+  { text: "You are the reason it's so hard to resist spending money, to resist skipping class and work. Because being with you makes me feel safe, makes me feel peace, makes me feel like I'm home.", image: "/videos/yoshi_egg.mp4", audio: "/audios/nineteen.mp3" },
+  { text: "Our inside jokes. If you know you know hehe.", image: "/videos/yoshi_standing.mp4", audio: "/audios/twenty.mp3" },
+  { text: "YOU. YOU are the sole reason why I love you. Celine, no matter what the other reasons are, they cannot be compared to this one reason. Because I don't need a reason to love you. Being yourself is the biggest and greatest reason I fell for you. For that reason, please walk with me and let's see together what the future has in store for us!", image: "/videos/yoshi_flower.mp4", audio: "/audios/twentyone.mp3" },
+];
+
+const reasonsCard = document.querySelector("#reasons");
+const reasonText = document.querySelector("#reason-text");
+const reasonCount = document.querySelector("#reason-count");
+const reasonPlay = document.querySelector("#reason-play");
+const reasonImage = document.querySelector("#reason-image");
+let reasonIndex = 0;
+let reasonVoice = null;
+let reasonSwipe = false;
+let reasonStartX = 0;
+let reasonStartY = 0;
+
+reasonsCard.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+  reasonStartX = event.clientX;
+  reasonStartY = event.clientY;
+  reasonSwipe = false;
+});
+
+reasonsCard.addEventListener("pointerup", (event) => {
+  const across = event.clientX - reasonStartX;
+  const down = event.clientY - reasonStartY;
+  if (Math.abs(across) >= 40 && Math.abs(across) > Math.abs(down)) {
+    reasonSwipe = true;
+    stepReason(across < 0 ? 1 : -1);
+    return;
+  }
+  if (event.target.closest("#reason-play")) {
+    playReason();
+  }
+});
+
+function showReason(index) {
+  reasonIndex = index;
+  const reason = reasons[index];
+  reasonText.textContent = reason.text;
+  reasonCount.textContent = `${index + 1} / ${reasons.length}`;
+  reasonPlay.setAttribute("aria-label", `Play reason ${index + 1}`);
+  if (reason.image) {
+    reasonImage.hidden = false;
+    reasonImage.src = reason.image;
+    reasonImage.play().catch(() => {});
+  } else {
+    reasonImage.hidden = true;
+    reasonImage.removeAttribute("src");
+    reasonImage.pause();
+  }
+  stopReason();
+}
+
+function stepReason(direction) {
+  const next = (reasonIndex + direction + reasons.length) % reasons.length;
+  showReason(next);
+}
+
+function playReason() {
+  const src = reasons[reasonIndex].audio;
+  if (!src) {
+    return;
+  }
+  stopReason();
+  reasonVoice = new Audio(src);
+  reasonVoice.play().catch(() => {});
+}
+
+function stopReason() {
+  if (!reasonVoice) {
+    return;
+  }
+  reasonVoice.pause();
+  reasonVoice = null;
+}
+
+showReason(0);
+
 async function postJSON(url, body) {
   const response = await fetch(url, {
     method: "POST",
