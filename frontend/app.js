@@ -363,13 +363,160 @@ function currentPosition() {
   });
 }
 
+const routeScreen = document.querySelector("#route-screen");
+const routeTitle = document.querySelector("#route-title");
+const routeWhen = document.querySelector("#route-when");
+const routeSteps = document.querySelector("#route-steps");
+const routeMap = document.querySelector("#route-map");
+const shownRoutes = new WeakMap();
+let routeLeaflet = null;
+let routeWatch = 0;
+
+document.querySelector("#route-close").addEventListener("click", closeRoute);
+school.querySelector(".see-route").addEventListener("click", () => openShownRoute(school));
+home.querySelector(".see-route").addEventListener("click", () => openShownRoute(home));
+
 function renderRide(ride, route) {
+  shownRoutes.set(ride, route);
   ride.querySelector(".leave").textContent = `Leave by: ${clock(route.leaveAt)}`;
   ride.querySelector(".eta").textContent = `ETA: ${clock(route.arriveAt)}`;
-  const link = ride.querySelector(".see-route");
-  link.href = route.mapsUrl;
   ride.querySelector(".ride-times").hidden = false;
   ride.querySelector(".message").hidden = true;
+}
+
+function openShownRoute(ride) {
+  const route = shownRoutes.get(ride);
+  if (route) {
+    showRoute(route);
+  }
+}
+
+function showRoute(route) {
+  routeTitle.textContent = route.label || "Route";
+  routeWhen.textContent = `Leave by ${clock(route.leaveAt)} · ETA ${clock(route.arriveAt)}`;
+  routeSteps.replaceChildren();
+  for (const [index, step] of (route.steps || []).entries()) {
+    const item = document.createElement("li");
+    if (index === 0) {
+      item.className = "next";
+    }
+    const title = document.createElement("span");
+    title.className = "step-title";
+    title.textContent = index === 0 ? `Next: ${step.title}` : step.title;
+    const detail = document.createElement("span");
+    detail.className = "step-detail";
+    detail.textContent = step.detail || "";
+    item.append(title, detail);
+    if (step.leaveAt) {
+      const when = document.createElement("span");
+      when.className = "step-time";
+      when.textContent = `Leave ${clock(step.leaveAt)} · Arrive ${clock(step.arriveAt)}`;
+      item.append(when);
+    }
+    routeSteps.append(item);
+  }
+  routeScreen.hidden = false;
+  drawRoute(route);
+  watchRouteLocation();
+}
+
+function closeRoute() {
+  routeScreen.hidden = true;
+  if (routeWatch) {
+    navigator.geolocation.clearWatch(routeWatch);
+    routeWatch = 0;
+  }
+  if (routeLeaflet) {
+    routeLeaflet.remove();
+    routeLeaflet = null;
+  }
+}
+
+function drawRoute(route) {
+  if (!window.L) {
+    return;
+  }
+  if (routeLeaflet) {
+    routeLeaflet.remove();
+  }
+  routeLeaflet = L.map(routeMap, { zoomControl: false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap",
+  }).addTo(routeLeaflet);
+  const points = decodePath(route.path || "");
+  const markers = [];
+  if (points.length) {
+    const line = L.polyline(points, { color: "#2f6fed", weight: 5 }).addTo(routeLeaflet);
+    markers.push(line);
+  }
+  for (const step of route.steps || []) {
+    if (step.mode === "transit" && step.lat != null && step.lng != null) {
+      markers.push(L.circleMarker([step.lat, step.lng], {
+        radius: 7,
+        color: "#243028",
+        fillColor: "#f6e2a8",
+        fillOpacity: 1,
+      }).addTo(routeLeaflet).bindTooltip(step.title));
+    }
+  }
+  if (markers.length) {
+    routeLeaflet.fitBounds(L.featureGroup(markers).getBounds(), { padding: [24, 24] });
+  } else {
+    routeLeaflet.setView([47.66, -122.31], 12);
+  }
+  setTimeout(() => routeLeaflet.invalidateSize(), 0);
+}
+
+function watchRouteLocation() {
+  if (!navigator.geolocation || !routeLeaflet) {
+    return;
+  }
+  if (routeWatch) {
+    navigator.geolocation.clearWatch(routeWatch);
+  }
+  const dot = L.circleMarker([0, 0], {
+    radius: 8,
+    color: "white",
+    weight: 2,
+    fillColor: "#e85c5c",
+    fillOpacity: 1,
+  }).addTo(routeLeaflet);
+  dot.setStyle({ opacity: 0, fillOpacity: 0 });
+  routeWatch = navigator.geolocation.watchPosition((position) => {
+    dot.setLatLng([position.coords.latitude, position.coords.longitude]);
+    dot.setStyle({ opacity: 1, fillOpacity: 1 });
+  });
+}
+
+function decodePath(encoded) {
+  const points = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte = 0;
+    do {
+      byte = encoded.charCodeAt(index) - 63;
+      index += 1;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index) - 63;
+      index += 1;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
 }
 
 function setRide(ride, message) {

@@ -9,7 +9,8 @@
   <title>C.E.L.I.N.A</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/images/hungry_yoshi.png">
-  <link rel="stylesheet" href="/styles.css?v=18">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/styles.css?v=19">
 </head>
 <body>
   <main>
@@ -71,7 +72,7 @@
           <div class="ride-times" hidden>
             <p class="leave"></p>
             <p class="eta"></p>
-            <a class="see-route" href="" target="_blank" rel="noopener">See route</a>
+            <button type="button" class="see-route">See route</button>
           </div>
           <p class="message">Looking up the bus.</p>
           <button type="button" class="here">Use current location</button>
@@ -81,7 +82,7 @@
           <div class="ride-times" hidden>
             <p class="leave"></p>
             <p class="eta"></p>
-            <a class="see-route" href="" target="_blank" rel="noopener">See route</a>
+            <button type="button" class="see-route">See route</button>
           </div>
           <p class="message">Looking up the bus.</p>
           <button type="button" class="here">Use current location</button>
@@ -117,6 +118,16 @@
 
     <p id="error" class="error" hidden>The page could not load. Try again in a moment.</p>
   </main>
-  <script src="/app.js?v=13"></script>
+  <div id="route-screen" hidden>
+    <div class="route-bar">
+      <button type="button" id="route-close">Back</button>
+      <h2 id="route-title"></h2>
+    </div>
+    <div id="route-map"></div>
+    <p id="route-when"></p>
+    <ol id="route-steps"></ol>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app.js?v=14"></script>
 </body>
 </html>

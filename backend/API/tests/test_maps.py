@@ -211,6 +211,39 @@ class MapsTests(unittest.TestCase):
                 origin="47.66,-122.31",
             )
 
+    def test_route_includes_the_path_and_every_step(self):
+        payload = _leg()
+        payload["routes"][0]["polyline"] = {"encodedPolyline": "encoded-path"}
+        payload["routes"][0]["legs"][0]["steps"].insert(
+            0,
+            {
+                "travelMode": "WALK",
+                "navigationInstruction": {"instructions": "Walk to Westminster Way"},
+                "distanceMeters": 180,
+                "endLocation": {"latLng": {"latitude": 47.75, "longitude": -122.34}},
+            },
+        )
+        captured = {}
+
+        def capture(request, timeout):
+            captured["request"] = request
+            return _Body(payload)
+
+        with patch("maps.urlopen", capture):
+            route = maps.route_to_university_district(
+                datetime(2026, 10, 13, 16, 0),
+                origin=(47.66, -122.31),
+                timing="leave_now",
+            )
+
+        mask = captured["request"].get_header("X-goog-fieldmask")
+        self.assertIn("routes.polyline.encodedPolyline", mask)
+        self.assertEqual("encoded-path", route["path"])
+        self.assertEqual("walk", route["steps"][0]["mode"])
+        self.assertEqual("Walk to Westminster Way", route["steps"][0]["title"])
+        self.assertEqual("transit", route["steps"][1]["mode"])
+        self.assertEqual("2026-10-13T08:10:00-07:00", route["leaveAt"])
+
     def test_maps_link_follows_arrive_by_or_leave_by(self):
         leave = datetime.fromisoformat("2026-10-13T09:40:00-07:00")
         arrive = datetime.fromisoformat("2026-10-13T10:12:00-07:00")

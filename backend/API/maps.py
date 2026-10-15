@@ -21,7 +21,19 @@ UNIVERSITY_DISTRICT = "University District Station Light Rail"
 ARRIVAL_BUFFER_MINUTES = 10
 TIMINGS = ("leave_now", "leave_by", "arrive_by")
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
-FIELD_MASK = "routes.legs.steps.travelMode,routes.legs.steps.transitDetails"
+FIELD_MASK = ",".join(
+    (
+        "routes.polyline.encodedPolyline",
+        "routes.legs.steps.travelMode",
+        "routes.legs.steps.distanceMeters",
+        "routes.legs.steps.staticDuration",
+        "routes.legs.steps.navigationInstruction.instructions",
+        "routes.legs.steps.polyline.encodedPolyline",
+        "routes.legs.steps.startLocation.latLng",
+        "routes.legs.steps.endLocation.latLng",
+        "routes.legs.steps.transitDetails",
+    )
+)
 
 
 def day_window(now):
@@ -144,7 +156,8 @@ def _transit_route(origin, destination, moment, timing, label):
     routes = payload.get("routes") or []
     if not routes or not routes[0].get("legs"):
         raise RuntimeError("Google Maps returned no transit route.")
-    rides = _rides(routes[0]["legs"][0])
+    leg = routes[0]["legs"][0]
+    rides = _rides(leg)
     if not rides:
         raise RuntimeError("Google Maps returned no transit route.")
     return {
@@ -156,6 +169,8 @@ def _transit_route(origin, destination, moment, timing, label):
         "leaveAt": rides[0]["leaveAt"],
         "arriveAt": rides[-1]["arriveAt"],
         "summary": ", then ".join(ride["summary"] for ride in rides),
+        "path": (routes[0].get("polyline") or {}).get("encodedPolyline") or "",
+        "steps": _follow_steps(leg),
         "mapsUrl": _maps_url(
             origin,
             destination,
@@ -192,6 +207,64 @@ def _clock_time(value):
     except ValueError:
         return None
     return _pacific(parsed)
+
+
+def _follow_steps(leg):
+    steps = []
+    for step in leg.get("steps") or []:
+        if step.get("travelMode") == "TRANSIT":
+            steps.append(_transit_step(step))
+        else:
+            steps.append(_walk_step(step))
+    return [step for step in steps if step]
+
+
+def _walk_step(step):
+    instruction = (step.get("navigationInstruction") or {}).get("instructions") or "Walk"
+    point = _lat_lng(step.get("endLocation")) or _lat_lng(step.get("startLocation"))
+    return {
+        "mode": "walk",
+        "title": instruction,
+        "detail": _distance_text(step.get("distanceMeters")),
+        "lat": point[0] if point else None,
+        "lng": point[1] if point else None,
+    }
+
+
+def _transit_step(step):
+    details = step.get("transitDetails") or {}
+    line = details.get("transitLine") or {}
+    stops = details.get("stopDetails") or {}
+    depart = (stops.get("departureStop") or {})
+    arrive = (stops.get("arrivalStop") or {})
+    name = line.get("nameShort") or line.get("name") or "Transit"
+    point = _lat_lng(depart.get("location")) or _lat_lng(step.get("startLocation"))
+    return {
+        "mode": "transit",
+        "title": f"{_vehicle_name(line)} {name}".strip(),
+        "detail": f"{depart.get('name') or 'the stop'} to {arrive.get('name') or 'the stop'}",
+        "leaveAt": stops.get("departureTime"),
+        "arriveAt": stops.get("arrivalTime"),
+        "lat": point[0] if point else None,
+        "lng": point[1] if point else None,
+    }
+
+
+def _lat_lng(place):
+    point = (place or {}).get("latLng") or {}
+    latitude = point.get("latitude")
+    longitude = point.get("longitude")
+    if latitude is None or longitude is None:
+        return None
+    return latitude, longitude
+
+
+def _distance_text(meters):
+    if not isinstance(meters, (int, float)):
+        return ""
+    if meters >= 1000:
+        return f"{meters / 1000:.1f} km"
+    return f"{round(meters)} m"
 
 
 def _rides(leg):
