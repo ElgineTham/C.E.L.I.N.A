@@ -9,7 +9,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -156,16 +156,42 @@ def _transit_route(origin, destination, moment, timing, label):
         "leaveAt": rides[0]["leaveAt"],
         "arriveAt": rides[-1]["arriveAt"],
         "summary": ", then ".join(ride["summary"] for ride in rides),
-        "mapsUrl": "https://www.google.com/maps/dir/?"
-        + urlencode(
-            {
-                "api": "1",
-                "origin": origin,
-                "destination": destination,
-                "travelmode": "transit",
-            }
+        "mapsUrl": _maps_url(
+            origin,
+            destination,
+            rides[0]["leaveAt"],
+            rides[-1]["arriveAt"],
+            timing,
+            moment,
         ),
     }
+
+
+def _maps_url(origin, destination, leave_at, arrive_at, timing, moment):
+    """Match the card: arrive-by trips open as arrive by, leave-by trips as leave by."""
+    if timing == "arrive_by":
+        when = _clock_time(arrive_at) or moment
+        kind = "6e1"
+    else:
+        when = _clock_time(leave_at) or moment
+        kind = "6e0"
+    start = quote(str(origin), safe="")
+    end = quote(str(destination), safe="")
+    stamp = int(when.timestamp())
+    return (
+        f"https://www.google.com/maps/dir/{start}/{end}/"
+        f"data=!4m6!4m5!2m3!{kind}!7e2!8j{stamp}!3e3"
+    )
+
+
+def _clock_time(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return _pacific(parsed)
 
 
 def _rides(leg):

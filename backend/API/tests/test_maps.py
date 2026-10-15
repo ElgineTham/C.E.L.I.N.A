@@ -149,7 +149,7 @@ class MapsTests(unittest.TestCase):
             "then Light rail 1 Line from Shoreline North Station to University District Station",
             route["summary"],
         )
-        self.assertIn("travelmode=transit", route["mapsUrl"])
+        self.assertIn("3e3", route["mapsUrl"])
 
     def test_home_route_leaves_at_the_last_event_end(self):
         schedule.put_event("09:00", "10:15", "CHEM 210", date="2026-10-13")
@@ -210,6 +210,19 @@ class MapsTests(unittest.TestCase):
                 datetime(2026, 10, 13, 16, 0),
                 origin="47.66,-122.31",
             )
+
+    def test_maps_link_follows_arrive_by_or_leave_by(self):
+        leave = datetime.fromisoformat("2026-10-13T09:40:00-07:00")
+        arrive = datetime.fromisoformat("2026-10-13T10:12:00-07:00")
+        arrival = maps._maps_url("Home", "School", leave.isoformat(), arrive.isoformat(), "arrive_by", arrive)
+        departure = maps._maps_url("School", "Home", leave.isoformat(), arrive.isoformat(), "leave_by", leave)
+
+        self.assertIn("6e1", arrival)
+        self.assertNotIn("6e0", arrival)
+        self.assertIn(str(int(arrive.timestamp())), arrival)
+        self.assertIn("6e0", departure)
+        self.assertNotIn("6e1", departure)
+        self.assertIn(str(int(leave.timestamp())), departure)
 
     def test_past_class_start_leaves_now(self):
         schedule.put_event("09:00", "10:15", "CHEM 210", date="2026-10-13")
